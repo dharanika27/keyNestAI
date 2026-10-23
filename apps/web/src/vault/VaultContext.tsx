@@ -8,6 +8,7 @@ export type VaultAppState =
   | { status: 'no-vault' }
   | { status: 'locked'; vaultId: string }
   | { status: 'unlocked'; session: VaultSession }
+  | { status: 'error'; message: string }
 
 export interface VaultContextValue {
   state: VaultAppState
@@ -18,6 +19,9 @@ export interface VaultContextValue {
    * encrypted data from IndexedDB — see UnlockScreen for the user-facing
    * explanation of what this does and doesn't do. */
   forgetVault: () => void
+  /** Re-runs startup initialization after an `'error'` state (e.g. a
+   * transient IndexedDB failure) instead of leaving the app stuck. */
+  retryInit: () => void
 }
 
 const VaultContext = createContext<VaultContextValue | null>(null)
@@ -31,16 +35,37 @@ const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchst
 
 export function VaultProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<VaultAppState>({ status: 'loading' })
+  // Bumped by retryInit() to force the startup-init effect below to run
+  // again after an 'error' state, since its own dependency array can't
+  // depend on `state` without re-running on every unrelated transition.
+  const [initAttempt, setInitAttempt] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setState({ status: 'loading' })
     async function init() {
       const pointer = getActiveVaultId()
       if (!pointer) {
         if (!cancelled) setState({ status: 'no-vault' })
         return
       }
-      const metadata = await repository.getVaultMetadata(pointer)
+      let metadata
+      try {
+        metadata = await repository.getVaultMetadata(pointer)
+      } catch (err) {
+        // A rejection here (IndexedDB unavailable/blocked, storage quota,
+        // private-browsing restrictions, etc.) must not leave the app
+        // stuck on an unending loading state with no way forward
+        // (CLAUDE.md §14's required error states) — surface it and offer
+        // a retry instead.
+        if (!cancelled) {
+          setState({
+            status: 'error',
+            message: err instanceof Error ? err.message : 'Could not access local vault storage.',
+          })
+        }
+        return
+      }
       if (cancelled) return
       if (!metadata) {
         // Pointer references a vault that no longer exists in this
@@ -57,7 +82,7 @@ export function VaultProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initAttempt])
 
   // Clock-driven inactivity lock: periodic poll (covers "no interaction at
   // all") plus activity listeners that call touch() (covers "actively
@@ -118,6 +143,9 @@ export function VaultProvider({ children }: { children: ReactNode }) {
       forgetVault() {
         clearActiveVaultId()
         setState({ status: 'no-vault' })
+      },
+      retryInit() {
+        setInitAttempt((n) => n + 1)
       },
     }),
     [state],

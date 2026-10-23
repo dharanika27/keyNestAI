@@ -32,6 +32,10 @@ Location: `apps/web/src/storage/__tests__/`, `apps/web/src/__tests__/`.
 | Two separate repository connections racing a CAS write (simulating two browser tabs) | Exactly one writer wins — the atomicity contract required by `packages/shared/src/vault/repository.ts`'s JSDoc holds for the real IndexedDB adapter, not only the in-memory one |
 | Full workflow: create vault → add → view/reveal → edit → delete (confirmed) → lock → wrong password rejected → correct password unlocks with data intact | End-to-end local vault workflow through the actual React UI (`@testing-library/react` + `user-event`), not a mocked view layer |
 | Search by title/username/category | `searchRecords` wired correctly through the dashboard UI |
+| Clipboard clear on unmount / clipboard-contents-changed / normal timer path | `RevealablePasswordField`'s best-effort clear fires immediately on teardown (not only on the scheduled timer), and never clears a clipboard holding something else |
+| Inactivity lock — periodic poll with no activity / activity events extend the session | `VaultContext`'s UI wiring actually flips the rendered screen to `UnlockScreen` against the real default timeout (via fake timers), not just `VaultSession`'s internal state |
+| App restart — unmount and remount against a vault already in IndexedDB | The cold-start `'locked'` path (CLAUDE.md §6's offline-reopen requirement) always re-requires the master password and never auto-unlocks; data added before the simulated restart is intact after re-unlocking |
+| Startup `IndexedDB.getVaultMetadata` failure → error screen → retry | A rejected startup read surfaces a visible error state instead of an unending loading spinner, and retry recovers once the underlying failure clears |
 
 Run via `npm test` in `apps/web` (Vitest + jsdom). `npx tsc -b --noEmit`, `npx vite build`, and `npx oxlint` are also run and must pass.
 

@@ -2,9 +2,10 @@ import { useVault } from './vault/VaultContext'
 import { CreateVaultScreen } from './screens/CreateVaultScreen'
 import { UnlockScreen } from './screens/UnlockScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
+import { ErrorScreen } from './screens/ErrorScreen'
 
 export default function App() {
-  const { state, createVault, unlock, lock, forgetVault } = useVault()
+  const { state, createVault, unlock, lock, forgetVault, retryInit } = useVault()
 
   switch (state.status) {
     case 'loading':
@@ -21,5 +22,7 @@ export default function App() {
       return <UnlockScreen onUnlock={unlock} onForget={forgetVault} />
     case 'unlocked':
       return <DashboardScreen session={state.session} onLock={lock} />
+    case 'error':
+      return <ErrorScreen message={state.message} onRetry={retryInit} />
   }
 }
