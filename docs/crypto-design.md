@@ -4,7 +4,9 @@ Status: resolved for Phase 1 implementation. Changes to this document require re
 
 ## 1. Library choice
 
-**libsodium**, via `libsodium-wrappers` (web, WASM) and `react-native-libsodium` (mobile, native bindings to the same libsodium C library). One library, one set of primitives, on both platforms, instead of mixing Web Crypto API (AES-GCM) with a separate mobile-only primitive set.
+**libsodium**, via `libsodium-wrappers-sumo` (web/Node, WASM) and `react-native-libsodium` (mobile, native bindings to the same libsodium C library). One library, one set of primitives, on both platforms, instead of mixing Web Crypto API (AES-GCM) with a separate mobile-only primitive set.
+
+Note: the standard `libsodium-wrappers` build omits `crypto_pwhash` (Argon2id) to reduce bundle size; the "sumo" build includes the full API and is required here since Argon2id is this project's KDF. The non-sumo package's ESM entry point is also broken for versions `<0.8.0` (it references a sibling file that is not actually published) — pin `^0.8.4` or later for either package.
 
 Rationale:
 - Provides both the KDF (`crypto_pwhash`, Argon2id) and the AEAD cipher (`crypto_aead_xchacha20poly1305_ietf`) needed here from a single, widely-audited library, avoiding inconsistent crypto stacks between web and mobile.
