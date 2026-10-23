@@ -302,6 +302,50 @@ describe("VaultSession — locking", () => {
     expect(session.isLocked()).toBe(false);
   });
 
+  it("touch() extends the session on general activity without performing a vault operation", async () => {
+    const repo = new InMemoryVaultRepository();
+    const clock = new FakeClock(0);
+    const session = await VaultSession.create(SYNTHETIC_PASSWORD, {
+      repository: repo,
+      clock,
+      inactivityTimeoutMs: 1000,
+    });
+
+    clock.advanceBy(999);
+    session.touch(); // resets the timer purely from "activity", no CRUD call
+    expect(session.isLocked()).toBe(false);
+
+    clock.advanceBy(999);
+    expect(session.isLocked()).toBe(false); // still within the window touch() extended
+  });
+
+  it("touch() applies the lock instead of reviving an already-expired session", async () => {
+    const repo = new InMemoryVaultRepository();
+    const clock = new FakeClock(0);
+    const session = await VaultSession.create(SYNTHETIC_PASSWORD, {
+      repository: repo,
+      clock,
+      inactivityTimeoutMs: 500,
+    });
+
+    clock.advanceBy(500);
+    session.touch();
+
+    expect(session.isLocked()).toBe(true);
+    await expect(session.listRecords()).rejects.toThrow(VaultLockedError);
+  });
+
+  it("touch() is a no-op once the vault is already locked", async () => {
+    const repo = new InMemoryVaultRepository();
+    const session = await VaultSession.create(SYNTHETIC_PASSWORD, { repository: repo });
+
+    session.lock();
+    session.touch(); // must not unlock or otherwise change state
+
+    expect(session.isLocked()).toBe(true);
+    await expect(session.listRecords()).rejects.toThrow(VaultLockedError);
+  });
+
   it("rejects a record write if the vault is locked while the write is still in flight", async () => {
     const repo = new InMemoryVaultRepository();
     const session = await VaultSession.create(SYNTHETIC_PASSWORD, { repository: repo });

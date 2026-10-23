@@ -21,8 +21,21 @@ Location: `packages/shared/src/crypto/__tests__/`
 
 Run via `npm test` in `packages/shared` (Vitest). Results reported in the Phase 1 completion report with actual pass/fail counts — not asserted without execution.
 
-## Phase 2 — Web application (planned)
-Integration tests for vault creation/unlock/CRUD against IndexedDB persistence; accessibility checks on primary screens; offline-mode manual/automated verification (network disabled).
+## Phase 2 — Web application
+
+Location: `apps/web/src/storage/__tests__/`, `apps/web/src/__tests__/`.
+
+| Test | Verifies |
+|---|---|
+| `IndexedDbVaultRepository` metadata/record round trip | Correct storage/retrieval shape against a real (fake-indexeddb-backed) IndexedDB engine, not a mock of our own code |
+| `saveRecordIfVersionMatches` create/update/conflict semantics | Same CAS contract as the in-memory reference repository, re-verified against IndexedDB specifically |
+| Two separate repository connections racing a CAS write (simulating two browser tabs) | Exactly one writer wins — the atomicity contract required by `packages/shared/src/vault/repository.ts`'s JSDoc holds for the real IndexedDB adapter, not only the in-memory one |
+| Full workflow: create vault → add → view/reveal → edit → delete (confirmed) → lock → wrong password rejected → correct password unlocks with data intact | End-to-end local vault workflow through the actual React UI (`@testing-library/react` + `user-event`), not a mocked view layer |
+| Search by title/username/category | `searchRecords` wired correctly through the dashboard UI |
+
+Run via `npm test` in `apps/web` (Vitest + jsdom). `npx tsc -b --noEmit`, `npx vite build`, and `npx oxlint` are also run and must pass.
+
+**Known gaps, not yet covered:** no automated accessibility audit (e.g. axe) — accessibility was addressed via semantic HTML/ARIA/Radix primitives during implementation but not independently verified by a tool; no real-browser manual verification was performed (no browser-automation tool was available in this environment — see the Phase 2 completion report); no "network disabled" explicit test, though the app has no network calls to disable (IndexedDB-only persistence, consistent with offline-first design).
 
 ## Phase 3 — Backend (planned)
 Cross-user and cross-vault authorization tests (`tests/security/`); rate-limit tests on auth endpoints; input validation/fuzzing on all protected endpoints; verification that no endpoint can return another account's ciphertext or wrapped keys.

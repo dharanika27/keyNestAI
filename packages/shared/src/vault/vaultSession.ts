@@ -3,8 +3,10 @@ import {
   CryptoError,
   DEFAULT_KDF_TIER,
   buildAad,
+  decodeUtf8,
   decryptBlob,
   deriveKeyFromPassword,
+  encodeUtf8,
   encryptBlob,
   generateId,
   generateSalt,
@@ -161,6 +163,24 @@ export class VaultSession {
       return true;
     }
     return false;
+  }
+
+  /** Refreshes the inactivity timer in response to general user activity
+   * (e.g. mouse/keyboard/focus events) rather than a vault data operation —
+   * intended for a UI layer to call on user interaction so a user actively
+   * reading a record isn't auto-locked just because they haven't triggered
+   * a CRUD call recently. No-op if already locked: this cannot unlock or
+   * extend access on its own, it only resets the clock consulted by future
+   * gated operations while the session is still unlocked. If the
+   * inactivity timeout had already elapsed, this applies the lock instead
+   * of silently reviving a stale session. */
+  touch(): void {
+    if (this.state !== "unlocked") return;
+    if (this.isInactivityExpired()) {
+      this.lock();
+      return;
+    }
+    this.lastActivityAt = this.clock.now();
   }
 
   /** Explicit lock. Synchronous state transition — secret-reading and
@@ -372,7 +392,7 @@ export class VaultSession {
       notes: record.notes,
       category: record.category,
     };
-    const plaintext = new TextEncoder().encode(JSON.stringify(fields));
+    const plaintext = encodeUtf8(JSON.stringify(fields));
     const ciphertext = await encryptBlob(vaultKey, plaintext, aad);
     return {
       id: record.id,
@@ -410,7 +430,7 @@ export class VaultSession {
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(new TextDecoder().decode(plaintext));
+      parsed = JSON.parse(decodeUtf8(plaintext));
     } catch {
       throw new RecordIntegrityError(`Record ${envelope.id} contains malformed data.`);
     }

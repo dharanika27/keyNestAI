@@ -1,4 +1,5 @@
 import { encryptBlob, decryptBlob } from "./aead.js";
+import { encodeUtf8 } from "./textEncoding.js";
 
 /**
  * Wraps (encrypts) one key under another using the same AEAD construction as
@@ -11,7 +12,7 @@ export async function wrapKey(
   wrappingKey: Uint8Array,
   purpose: string,
 ): Promise<Uint8Array> {
-  const aad = new TextEncoder().encode(`key-wrap|${purpose}`);
+  const aad = encodeUtf8(`key-wrap|${purpose}`);
   return encryptBlob(wrappingKey, keyToWrap, aad);
 }
 
@@ -24,6 +25,6 @@ export async function unwrapKey(
   wrappingKey: Uint8Array,
   purpose: string,
 ): Promise<Uint8Array> {
-  const aad = new TextEncoder().encode(`key-wrap|${purpose}`);
+  const aad = encodeUtf8(`key-wrap|${purpose}`);
   return decryptBlob(wrappingKey, wrapped, aad);
 }

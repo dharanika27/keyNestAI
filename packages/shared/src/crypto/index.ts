@@ -13,3 +13,4 @@ export { generateVaultKey } from "./vaultKey.js";
 export { wrapKey, unwrapKey } from "./keyWrap.js";
 export { wipe } from "./memory.js";
 export { generateId } from "./id.js";
+export { encodeUtf8, decodeUtf8 } from "./textEncoding.js";

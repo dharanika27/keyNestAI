@@ -1,0 +1,9 @@
+{
+  "name": "keynest-ai",
+  "private": true,
+  "description": "Monorepo root for KeyNest AI TypeScript workspaces (packages/shared, apps/web, apps/mobile). Python services (services/api, services/ai) are managed independently.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ]
+}
