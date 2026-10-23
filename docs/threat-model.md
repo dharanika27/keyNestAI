@@ -45,6 +45,7 @@ This document is updated whenever a new feature or trust boundary is introduced 
 ### 3.4 Stolen/compromised device (unlocked / in-session)
 - **Mitigation:** Inactivity auto-lock, explicit lock control, passwords hidden by default, clipboard-clear best effort, no secrets in app-switcher previews where the OS allows suppression.
 - **Residual risk:** An attacker with an unlocked device has the same access the user does; this is a session-boundary problem, not solvable by vault cryptography. Documented as a limitation.
+- **Residual risk (lock-during-in-flight-operation):** `VaultSession` re-checks lock state (`assertStillUnlocked`) immediately before each secret-touching repository write or before returning decrypted plaintext, so an explicit `lock()` call landing mid-operation stops that operation's effect from completing in the overwhelming majority of cases. For the in-memory reference repository this check-then-act window is effectively closed because the repository's compare-and-swap write (`saveRecordIfVersionMatches`) never yields to the event loop internally. A real transactional backing store (IndexedDB/SQLite, Phase 2/4) must preserve that same atomicity property for this guarantee to hold; this is a requirement on those implementations, not something the vault engine can enforce on their behalf.
 
 ### 3.5 Malicious/compromised AI provider
 - **Mitigation:** `services/ai` allowlisted tools return only non-secret metadata; policy-check step in the LangGraph workflow rejects any tool result containing fields classified as secret before it reaches the model. See `docs/ai-security-design.md`.
@@ -63,6 +64,11 @@ This document is updated whenever a new feature or trust boundary is introduced 
 
 ### 3.9 Weak master password
 - **Mitigation:** Argon2id with tuned parameters raises the cost of offline guessing but cannot fix a guessable password. Client-side strength feedback at vault creation. Documented as a user-dependent residual risk — zero-knowledge design means the server cannot "rescue" a weak-password vault.
+
+### 3.10 Intra-session write conflicts (same vault, concurrent callers)
+- **Threat:** Two concurrent calls into the same unlocked `VaultSession` (e.g. `updateRecord` racing a `deleteRecord`, or two concurrent `updateRecord` calls on the same record) could silently resurrect a deleted record or clobber one update with another, since both read a record's state before either has written it back.
+- **Mitigation:** `VaultRepository.saveRecordIfVersionMatches` is an atomic compare-and-swap write keyed on the record's version (or on non-existence, for creation). `addRecord`/`updateRecord` use it instead of an unconditional write; a losing writer gets a `RecordConflictError` instead of silently overwriting, per CLAUDE.md §6's "do not assume the last caller to synchronize should always win."
+- **Residual risk:** This resolves *detection* of the conflict, not resolution — the losing caller must re-read and decide how to proceed (retry, prompt the user, or abandon the change). No automatic merge is attempted, consistent with the offline-sync design's stance on genuine conflicts (`docs/offline-sync-design.md §4`).
 
 ## 4. Non-goals / explicit limitations
 
